@@ -27,16 +27,16 @@ uint8_t devicePassword[DEVICE_PASSWORD_MAX_LEN + 1] = {'\0'};
 //Topic - will be built from the device ID if not defined in the build environment.
 char topic[100];
 
-//Sleep Interval for sending telemetry. If not defined, use the default value of 10 seconds.
+//Check interval for flow state changes. If not defined, use the default value of 2 seconds.
 #ifndef SLEEP_INTERVAL
-  #define SLEEP_INTERVAL 10000
+  #define SLEEP_INTERVAL 2000
 #endif
 
 //SensorManager instance.
 SensorManager* sensorManager;
 
 void configureWifi();
-int sendMQTTMessage(float* currentTemperature, float* currentHumidity, float* currentPressure, int* gyroX, int* gyroY, int* gyroZ, int* buttonAState, int* buttonBState);
+int sendMQTTMessage(bool* waterFlowing);
 
 void setup() {
   //Set the Serial output speed so we can see the output in the Serial Monitor
@@ -95,66 +95,45 @@ void loop() {
   // Initialize or reconnect the Wifi
   configureWifi();
 
-  // Placeholders for current sensor data.
-  float currentTemperature = 0;
-  float currentHumidity = 0;
-  float currentPressure = 0;
-  int gyroX = 0;
-  int gyroY = 0;
-  int gyroZ = 0;
-  int buttonAState = 0;
-  int buttonBState = 0;
+  // Track previous state to detect changes
+  static bool previousWaterFlowing = false;
+  static bool firstRun = true;
+  
+  // Placeholder for water flow detection
+  bool waterFlowing = false;
 
-  // Read sensor data
-  sensorManager->readTempSensorData(&currentTemperature, &currentHumidity);
-  Serial.printf("Temperature: %.2f \n", currentTemperature);
-  Serial.printf("Humidity: %.2f \n", currentHumidity);
-  sensorManager->readPressureSensorData(&currentPressure);
-  Serial.printf("Pressure: %.2f \n", currentPressure);
-  sensorManager->readGyroSensorData(&gyroX, &gyroY, &gyroZ);
-  Serial.printf("Gyro: X=%.2f, Y=%.2f, Z=%.2f\n", gyroX, gyroY, gyroZ);
-  sensorManager->readButtonStates(&buttonAState, &buttonBState);
-  Serial.printf("Button A State: %d \n", buttonAState);
-  Serial.printf("Button B State: %d \n", buttonBState);
+  // Read water flow sensor data
+  sensorManager->readFlowDetection(&waterFlowing);
+  Serial.printf("Water Flowing: %s \n", waterFlowing ? "true" : "false");
 
-  // Print to OLED with scrolling info
-  static int scrollIndex = 0;
-  String lines[] = {
-    "Temp: " + String(currentTemperature),
-    "Humidity: " + String(currentHumidity),
-    "Pressure: " + String(currentPressure),
-    "Gyro X:" + String(gyroX),
-    "Gyro Y:" + String(gyroY),
-    "Gyro Z:" + String(gyroZ),
-    "BtnA=" + String(buttonAState) + " BtnB=" + String(buttonBState)
-  };
-  const int totalLines = sizeof(lines) / sizeof(lines[0]);
-  static bool showIP = true;
-  if (showIP) {
-    Screen.print(0, (String(WiFi.localIP().get_address())).c_str());
-  } else {
-    Screen.print(0, (String(WiFiInterface()->get_mac_address())).c_str());
+  // Print to OLED
+  Screen.print(0, (String(WiFi.localIP().get_address())).c_str());
+  Screen.print(1, "Water Flow");
+  Screen.print(2, waterFlowing ? "FLOWING" : "IDLE");
+  Screen.print(3, "");
+
+  // Only send MQTT message if state changed or first run
+  if (firstRun || waterFlowing != previousWaterFlowing) {
+    Serial.println("Flow state changed, sending MQTT message...");
+    
+    // Send the message to the MQTT server
+    int rc = sendMQTTMessage(&waterFlowing);
+
+    //If the message send failed, flash the RGB LED red.  Otherwise, flash it green.
+    if (rc != 0) {
+      Serial.printf("Message send failed %d \n", rc);
+      sensorManager->flashRGBLed(255,0,0);
+      return;
+    }
+    Serial.println("Message sent to MQTT server successfully");
+    sensorManager->flashRGBLed(0,255,0);
+    
+    // Update previous state
+    previousWaterFlowing = waterFlowing;
+    firstRun = false;
   }
-  for (int i = 0; i < 3; ++i) {
-    int idx = (scrollIndex + i) % totalLines;
-    Screen.print(i + 1, lines[idx].c_str());
-  }
-  scrollIndex = (scrollIndex + 1) % totalLines;
-  showIP = !showIP;
 
-  // Send the message to the MQTT server
-  int rc = sendMQTTMessage(&currentTemperature, &currentHumidity, &currentPressure, &gyroX, &gyroY, &gyroZ, &buttonAState, &buttonBState);
-
-  //If the message send failed, flash the RGB LED red.  Otherwise, flash it green.
-  if (rc != 0) {
-    Serial.printf("Message send failed %d \n", rc);
-    sensorManager->flashRGBLed(255,0,0);
-    return;
-  }
-  Serial.println("Message sent to MQTT server successfully");
-  sensorManager->flashRGBLed(0,255,0);
-
-  // Sleep for the configured interval.  
+  // Check frequently to detect state changes quickly
   delay(SLEEP_INTERVAL);
 }
 
@@ -168,7 +147,7 @@ void configureWifi()
   }
 }
 
-int sendMQTTMessage(float* currentTemperature, float* currentHumidity, float* currentPressure, int* gyroX, int* gyroY, int* gyroZ, int* buttonAState, int* buttonBState)
+int sendMQTTMessage(bool* waterFlowing)
 {
   
 
@@ -207,7 +186,7 @@ int sendMQTTMessage(float* currentTemperature, float* currentHumidity, float* cu
            tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec, ms);
 
   char buf[MQTT_MAX_PACKET_SIZE];
-  sprintf(buf, "{\"device\":\"%s\",\"mac\":\"%s\",\"temperature\":%.2f,\"humidity\":%.2f,\"pressure\":%.2f,\"gyroX\":%d,\"gyroY\":%d,\"gyroZ\":%d,\"buttonA\":%d,\"buttonB\":%d,\"deviceDateTime\":\"%s\"}", deviceId, WiFiInterface()->get_mac_address(), *currentTemperature, *currentHumidity, *currentPressure, *gyroX, *gyroY, *gyroZ, *buttonAState, *buttonBState, dateTimeStr);
+  sprintf(buf, "{\"device\":\"%s\",\"mac\":\"%s\",\"waterFlowing\":%s,\"deviceDateTime\":\"%s\"}", deviceId, WiFiInterface()->get_mac_address(), *waterFlowing ? "true" : "false", dateTimeStr);
 
   Serial.println(buf);
 
