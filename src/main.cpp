@@ -117,7 +117,7 @@ void loop() {
     Serial.println("Flow state changed, sending MQTT message...");
     
     // Send the message to the MQTT server
-    int rc = 0; //sendMQTTMessage(&waterFlowing);
+    int rc = sendMQTTMessage(&waterFlowing);
 
     //If the message send failed, flash the RGB LED red.  Otherwise, flash it green.
     if (rc != 0) {
@@ -176,12 +176,12 @@ int sendMQTTMessage(bool* waterFlowing)
 
   Serial.printf("Connecting to MQTT topic %s \n", topic);
 
-  // Get current time and format as yyyy/mm/dd hh:mm:ss:mmm
+  // Get current time and format as ISO 8601: yyyy-MM-ddTHH:mm:ss.fffZ
   time_t now = time(NULL);
   struct tm *tm_info = localtime(&now);
-  char dateTimeStr[25]; // yyyy/mm/dd hh:mm:ss:mmm\0
-  int ms = millis() % 1000;
-  snprintf(dateTimeStr, sizeof(dateTimeStr), "%04d/%02d/%02d %02d:%02d:%02d:%03d",
+  char dateTimeStr[30];
+  unsigned long ms = millis() % 1000;
+  snprintf(dateTimeStr, sizeof(dateTimeStr), "%04d-%02d-%02dT%02d:%02d:%02d.%03dZ",
            tm_info->tm_year + 1900, tm_info->tm_mon + 1, tm_info->tm_mday,
            tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec, ms);
 
