@@ -36,10 +36,10 @@ This project transforms the MXChip into a non-invasive water flow sensor by moun
 
 ```json
 {
-  "device": "your-device-id",
+  "device": "mxchip-water-01",
   "mac": "AA:BB:CC:DD:EE:FF",
   "waterFlowing": true,
-  "deviceDateTime": "2025/12/30 14:23:45:123"
+  "deviceDateTime": "2025-12-31T14:23:45.123Z"
 }
 ```
 
@@ -50,15 +50,6 @@ This project transforms the MXChip into a non-invasive water flow sensor by moun
 1. **PlatformIO** - Install [PlatformIO IDE](https://platformio.org/install) or PlatformIO Core
 2. **VS Code** (recommended) - With PlatformIO extension
 3. **MXChip USB Drivers** - Install STM32 drivers for your OS
-
-### Initial Device Configuration
-
-Before first use, configure the device with your WiFi and MQTT credentials using the MXChip configuration tool or by writing to EEPROM:
-
-1. **Device ID** - Unique identifier for your device
-2. **Device Password** - MQTT authentication password
-3. **MQTT Broker Address** - Hostname or IP of your MQTT server
-4. **WiFi Credentials** - Configured through MXChip WiFi setup
 
 ### Building and Uploading
 
@@ -82,9 +73,18 @@ Before first use, configure the device with your WiFi and MQTT credentials using
    - Press `Ctrl+Alt+U` or use PlatformIO: Upload task
    - Or run: `platformio run --target upload --environment mxchip_az3166`
 
-5. **Monitor serial output** (optional)
+5. **Monitor serial output**
    - Press `Ctrl+Alt+S` or use PlatformIO: Serial Monitor
    - Baud rate: 115200
+
+6. **Configure WiFi and MQTT**
+
+    Press Reset + A to enter configuration mode. Before first use, configure the device with your WiFi and MQTT credentials using the MXChip configuration tool or by writing to EEPROM:
+
+    - **Device ID** - Unique identifier for your device
+    - **Device Password** - MQTT authentication password
+    - **MQTT Broker Address** - Hostname or IP of your MQTT server
+    - **WiFi Credentials** - Configured through MXChip WiFi setup
 
 ### Physical Installation
 
@@ -102,15 +102,15 @@ Before first use, configure the device with your WiFi and MQTT credentials using
 
 ### Calibration
 
-The default vibration threshold is **0.15g**. Adjust if needed:
+The default vibration threshold is **0.01g**. Adjust if needed:
 
 1. Open `src/SensorManager.h`
 2. Modify the `flowThreshold` value:
    ```cpp
-   float flowThreshold = 0.15f;  // Adjust this value
+   float flowThreshold = 0.01f;  // Adjust this value
    ```
-3. **Lower values** (0.1g) = More sensitive (may trigger on small vibrations)
-4. **Higher values** (0.3g) = Less sensitive (requires stronger flow)
+3. **Lower values** (0.01g) = More sensitive (may trigger on small vibrations)
+4. **Higher values** (0.03g) = Less sensitive (requires stronger flow)
 5. Rebuild and upload after changes
 
 Test calibration by:
@@ -157,45 +157,4 @@ build_flags =
   - Isolate from environmental vibrations (footsteps, traffic)
   - Use firmer mounting to reduce resonance
 
-### WiFi Connection Issues
-
-- **Symptom**: Cannot connect to WiFi or MQTT broker
-- **Solutions**:
-  - Verify WiFi credentials in device configuration
-  - Check MQTT broker address and port
-  - Ensure 2.4GHz network (MXChip doesn't support 5GHz)
-  - Check serial output for connection error codes
-
-### LED Flashing Red
-
-- **Symptom**: Red LED after attempting to send message
-- **Solutions**:
-  - Verify MQTT broker is reachable
-  - Check device password matches broker configuration
-  - Confirm WiFi connection is stable
-  - Review serial output for specific error codes
-
-
-## Technical Details
-
-### Sensor Specifications
-
-- **Accelerometer**: LSM6DSL 6-axis MEMS sensor
-- **Measurement Range**: ±2g (configurable)
-- **Sampling Rate**: 50 samples per check (configurable)
-- **Detection Time**: ~50ms per measurement
-- **Response Time**: 2 seconds maximum (configurable)
-
-### Power Consumption
-
-- **Active Mode**: ~100mA (WiFi active, sensing)
-- **Idle Mode**: ~50mA (between checks)
-- **During MQTT Send**: ~200mA peak
-
-### Network Requirements
-
-- **WiFi**: 802.11 b/g/n (2.4GHz only)
-- **MQTT Protocol**: v3.1 or v4
-- **Max Packet Size**: 400 bytes
-- **QoS Level**: QoS 0 (at most once)
 

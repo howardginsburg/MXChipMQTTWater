@@ -132,6 +132,11 @@ void loop() {
     previousWaterFlowing = waterFlowing;
     firstRun = false;
   }
+  else
+  {
+    Serial.println("No data change, no need to send to MQTT server");
+    sensorManager->flashRGBLed(0,0,255);
+  }
 
   // Check frequently to detect state changes quickly
   delay(SLEEP_INTERVAL);
