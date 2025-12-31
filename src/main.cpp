@@ -117,7 +117,7 @@ void loop() {
     Serial.println("Flow state changed, sending MQTT message...");
     
     // Send the message to the MQTT server
-    int rc = sendMQTTMessage(&waterFlowing);
+    int rc = 0; //sendMQTTMessage(&waterFlowing);
 
     //If the message send failed, flash the RGB LED red.  Otherwise, flash it green.
     if (rc != 0) {

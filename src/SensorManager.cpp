@@ -13,15 +13,34 @@ SensorManager::SensorManager() {
 // Initialize the sensors
 void SensorManager::initSensors() {
     motionSensor->init(NULL);
-    // Accelerometer only (no gyroscope needed)
+    motionSensor->enableAccelerator();  // Enable accelerometer for readings
 }
 
 // Detect water flow by analyzing accelerometer vibrations
 void SensorManager::readFlowDetection(bool* isFlowing) {
     float sumAccel = 0.0f;
     int axes[3];
+    float avgX = 0.0f, avgY = 0.0f, avgZ = 0.0f;
     
-    // Collect multiple samples and calculate RMS of acceleration magnitude
+    // First pass: collect samples and calculate average (baseline gravity)
+    for (int i = 0; i < SAMPLE_COUNT; i++) {
+        motionSensor->getXAxes(axes);  // Get accelerometer data (X, Y, Z in mg)
+        
+        // Convert from mg to g
+        avgX += axes[0] / 1000.0f;
+        avgY += axes[1] / 1000.0f;
+        avgZ += axes[2] / 1000.0f;
+        
+        delayMicroseconds(500);
+    }
+    
+    // Calculate average acceleration (baseline includes gravity)
+    avgX /= SAMPLE_COUNT;
+    avgY /= SAMPLE_COUNT;
+    avgZ /= SAMPLE_COUNT;
+    
+    // Second pass: measure deviation from baseline (pure vibration)
+    sumAccel = 0.0f;
     for (int i = 0; i < SAMPLE_COUNT; i++) {
         motionSensor->getXAxes(axes);  // Get accelerometer data (X, Y, Z in mg)
         
@@ -30,16 +49,22 @@ void SensorManager::readFlowDetection(bool* isFlowing) {
         float accelY = axes[1] / 1000.0f;
         float accelZ = axes[2] / 1000.0f;
         
-        // Calculate magnitude of acceleration vector
-        float magnitude = sqrt(accelX*accelX + accelY*accelY + accelZ*accelZ);
+        // Calculate deviation from baseline (removes gravity component)
+        float devX = accelX - avgX;
+        float devY = accelY - avgY;
+        float devZ = accelZ - avgZ;
+        
+        // Calculate magnitude of vibration vector
+        float magnitude = sqrt(devX*devX + devY*devY + devZ*devZ);
         sumAccel += magnitude * magnitude;  // Sum of squares for RMS
         
-        delayMicroseconds(1000);  // Small delay between samples
+        delayMicroseconds(500);
     }
     
-    // Calculate RMS (root mean square) of acceleration magnitude
+    // Calculate RMS (root mean square) of vibration magnitude
     float rmsAccel = sqrt(sumAccel / SAMPLE_COUNT);
     
+    Serial.printf("RMS Vibration: %f g (baseline avg: %.2f g)\n", rmsAccel, sqrt(avgX*avgX + avgY*avgY + avgZ*avgZ));
     // Determine if water is flowing based on vibration threshold
     *isFlowing = (rmsAccel > flowThreshold);
 }
