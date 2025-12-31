@@ -12,6 +12,6 @@ private:
     DevI2C *i2c;
     LSM6DSLSensor* motionSensor;
     RGB_LED rgbLed;
-    float flowThreshold = 0.15f;  // Vibration threshold in g's (0.15g is default, adjust based on calibration)
+    float flowThreshold = 0.01f;  // Vibration threshold in g's (start low, adjust up if false positives)
     static const int SAMPLE_COUNT = 50;  // Number of accelerometer samples to average
 };
