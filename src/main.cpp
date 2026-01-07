@@ -197,7 +197,7 @@ int sendMQTTMessage(bool* waterFlowing)
 
   MQTT::Message message;
   message.qos = MQTT::QOS0;
-  message.retained = false;
+  message.retained = true;
   message.dup = false;
   message.payload = (void*)buf;
   message.payloadlen = strlen(buf);
