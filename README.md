@@ -79,7 +79,7 @@ This project transforms the MXChip into a non-invasive water flow sensor by moun
 
 6. **Configure WiFi and MQTT**
 
-    Press Reset + A to enter configuration mode. Before first use, configure the device with your WiFi and MQTT credentials using the MXChip configuration tool or by writing to EEPROM:
+    Press Reset + A to enter configuration mode. Before first use, configure the device with your WiFi and MQTT credentials using the MXChip configuration tool:
 
     - **Device ID** - Unique identifier for your device
     - **Device Password** - MQTT authentication password
