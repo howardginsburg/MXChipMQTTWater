@@ -158,3 +158,16 @@ build_flags =
   - Use firmer mounting to reduce resonance
 
 
+## Home Assistant Integration
+Add the following yaml snippet to your Home Assistant configuration to create a binary sensor for water flow detection:
+
+```yaml
+mqtt: 
+  binary_sensor:
+    - name: "Water Flow"
+      state_topic: "devices/water/messages/events"
+      value_template: "{{ 'ON' if value_json.waterFlowing else 'OFF' }}"
+      payload_on: "ON"
+      payload_off: "OFF"
+      device_class: running
+```
