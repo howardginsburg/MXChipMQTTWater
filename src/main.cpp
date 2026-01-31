@@ -1,14 +1,14 @@
 #include <Arduino.h>
 #include <AZ3166WiFi.h>
-#include <MQTTNetwork.h>
-#include <MQTTClient.h>
+#include <AZ3166WiFiClient.h>
+#include <PubSubClient.h>
 #include <OledDisplay.h>
 #include "EEPROMInterface.h"
 #include "SensorManager.h"
 #include <time.h>
 
-// Maximum packet size for MQTT messages.  We need to override the default of 100 in MQTTClient.h.
-const int MQTT_MAX_PACKET_SIZE = 400;
+// Maximum packet size for MQTT messages.
+const int MQTT_PACKET_SIZE = 400;
 
 // MQTT Broker
 uint8_t mqttBroker[MQTT_MAX_LEN + 1] = {'\0'};
@@ -154,28 +154,17 @@ void configureWifi()
 
 int sendMQTTMessage(bool* waterFlowing)
 {
-  
+  WiFiClient wifiClient;
+  PubSubClient client(wifiClient);
 
-  MQTTNetwork mqttNetwork;
-  MQTT::Client<MQTTNetwork, Countdown, MQTT_MAX_PACKET_SIZE> client = MQTT::Client<MQTTNetwork, Countdown, MQTT_MAX_PACKET_SIZE>(mqttNetwork);
+  client.setServer((const char*)mqttBroker, MQTT_PORT);
+  client.setBufferSize(MQTT_PACKET_SIZE);
 
   Serial.printf("Connecting to MQTT server %s:%d \n", mqttBroker, MQTT_PORT);
 
-  //Connect to the MQTT broker.  You must convert the port to an integer.
-  int rc = mqttNetwork.connect((const char*)mqttBroker, MQTT_PORT);
-  if (rc != 0) {
-    Serial.printf("Connected to MQTT server failed %d \n", rc);
-    return rc;
-  }
-
-  MQTTPacket_connectData data = MQTTPacket_connectData_initializer;
-  data.MQTTVersion = 4;
-  data.clientID.cstring = (char*)deviceId;
-  data.username.cstring = (char*)deviceId;
-  data.password.cstring = (char*)devicePassword;
-
-  if ((rc = client.connect(data)) != 0) {
-    Serial.println("MQTT client connect to server failed");
+  if (!client.connect((const char*)deviceId, (const char*)deviceId, (const char*)devicePassword)) {
+    int rc = client.state();
+    Serial.printf("MQTT client connect to server failed %d \n", rc);
     return rc;
   }
 
@@ -190,29 +179,25 @@ int sendMQTTMessage(bool* waterFlowing)
            tm_info->tm_year + 1900, tm_info->tm_mon + 1, tm_info->tm_mday,
            tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec, ms);
 
-  char buf[MQTT_MAX_PACKET_SIZE];
-  sprintf(buf, "{\"device\":\"%s\",\"mac\":\"%s\",\"waterFlowing\":%s,\"deviceDateTime\":\"%s\"}", deviceId, WiFiInterface()->get_mac_address(), *waterFlowing ? "true" : "false", dateTimeStr);
+  unsigned char mac[WL_MAC_ADDR_LENGTH];
+  WiFi.macAddress(mac);
+  char macStr[18];
+  snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+  char buf[MQTT_PACKET_SIZE];
+  sprintf(buf, "{\"device\":\"%s\",\"mac\":\"%s\",\"waterFlowing\":%s,\"deviceDateTime\":\"%s\"}", deviceId, macStr, *waterFlowing ? "true" : "false", dateTimeStr);
 
   Serial.println(buf);
 
-  MQTT::Message message;
-  message.qos = MQTT::QOS0;
-  message.retained = true;
-  message.dup = false;
-  message.payload = (void*)buf;
-  message.payloadlen = strlen(buf);
-  if (client.publish(topic, message) != 0) {
+  if (!client.publish(topic, (const uint8_t*)buf, strlen(buf), true)) {
+    int rc = client.state();
     Serial.printf("Message send failed %d \n", rc);
+    client.disconnect();
     return rc;
   }
-  
-  if ((rc = client.disconnect()) != 0) {
-    Serial.printf("MQTT Client Disconnect failed %d \n", rc);
-    return rc;
-  }
-  
-  if ((rc = mqttNetwork.disconnect()) != 0) {
-    Serial.printf("MQTT Network Disconnect failed %d \n", rc);
-    return rc;
-  }
+
+  client.disconnect();
+
+  return 0;
 }
